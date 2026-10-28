@@ -1,0 +1,178 @@
+name: 发布扩展与连接器
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  package:
+    name: Windows x64 发行产物
+    needs: verify
+    runs-on: windows-2022
+    timeout-minutes: 30
+    outputs:
+      commit: ${{ steps.identity.outputs.commit }}
+      version: ${{ steps.identity.outputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: 固定 Rust 工具链
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup override set 1.90.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: 核验发行标签
+        id: identity
+        env:
+          RELEASE_REF: ${{ github.ref_name }}
+          RELEASE_EVENT: ${{ github.event_name }}
+        run: |
+          $metadata = cargo metadata --locked --no-deps --format-version 1 | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $version = @($metadata.packages | Where-Object name -eq 'omnitrigger-browser')[0].version
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw '不支持的发行版本。' }
+          if ($env:RELEASE_EVENT -eq 'push' -and $env:RELEASE_REF -cne "v$version") { throw 'Git 标签必须与 Cargo / 扩展版本一致。' }
+          $commit = (& git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[a-f0-9]{40}$') { throw '无法确定实际构建提交。' }
+          "commit=$commit" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - name: 构建、核验许可、打包与哈希
+        env:
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: ./scripts/package-windows.ps1 -Repository $env:RELEASE_REPOSITORY
+      - name: 无 Cargo 的发行包安装验证
+        run: |
+          $manifest = Get-Content -Raw -LiteralPath dist/release-manifest.json | ConvertFrom-Json
+          $source = Join-Path $PWD '.local/package-install-source'
+          Expand-Archive -LiteralPath (Join-Path dist $manifest.artifacts.connector.fileName) -DestinationPath $source
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File installer/tests/registration-cli.tests.ps1 -BinaryPath (Join-Path $source 'omnitrigger-browser.exe')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File installer/tests/package-install.tests.ps1 -PackageDirectory $source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: omnitrigger-browser-release
+          path: |
+            dist/OmniTrigger-Browser-Connector-*-windows-x86_64.zip
+            dist/OmniTrigger-Browser-Extension-*.zip
+            dist/release-manifest.json
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: 发布 GitHub 预览版
+    needs: package
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-2022
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: omnitrigger-browser-release
+          path: release-assets
+      - name: 核验标签身份、上传草稿并校验后公开
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          EXPECTED_COMMIT: ${{ needs.package.outputs.commit }}
+          EXPECTED_VERSION: ${{ needs.package.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          function Read-GitHubApi([string]$Endpoint) {
+            $response = & gh api $Endpoint --include 2>&1
+            $code = $LASTEXITCODE
+            $text = ($response | ForEach-Object { $_.ToString() }) -join "`n"
+            $status = [regex]::Match($text, '(?m)^HTTP/\S+\s+(\d{3})\b')
+            if (-not $status.Success) { throw 'GitHub API 没有返回可核验的 HTTP 状态，停止发布。' }
+            $statusCode = [int]$status.Groups[1].Value
+            if ($statusCode -eq 404 -and $code -ne 0) { return [pscustomobject]@{ Status = 404; Body = $null } }
+            if ($code -ne 0 -or $statusCode -ne 200) { throw "GitHub API 请求失败（HTTP $statusCode），不能当作不存在继续发布。" }
+            $parts = [regex]::new('\r?\n\r?\n').Split($text, 2)
+            if ($parts.Count -ne 2) { throw 'GitHub API 响应缺少 JSON 正文。' }
+            return [pscustomobject]@{ Status = $statusCode; Body = ($parts[1] | ConvertFrom-Json) }
+          }
+          function Assert-TagCommit {
+            if ($env:EXPECTED_COMMIT -notmatch '^[a-f0-9]{40}$' -or $env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw '构建提交或发行标签无效。' }
+            $reference = Read-GitHubApi "repos/$env:GH_REPO/git/ref/tags/$env:RELEASE_TAG"
+            if ($reference.Status -ne 200) { throw '发行标签已不存在，停止发布。' }
+            $object = $reference.Body.object
+            for ($depth = 0; $object.type -eq 'tag' -and $depth -lt 8; $depth++) {
+              if ($object.sha -notmatch '^[a-f0-9]{40}$') { throw '带注释标签对象无效。' }
+              $tag = Read-GitHubApi "repos/$env:GH_REPO/git/tags/$($object.sha)"
+              if ($tag.Status -ne 200) { throw '无法解析带注释标签。' }
+              $object = $tag.Body.object
+            }
+            if ($object.type -ne 'commit' -or $object.sha -cne $env:EXPECTED_COMMIT) { throw '发行标签已移动或与实际构建提交不一致，停止发布。' }
+          }
+          function Assert-NoRelease {
+            $existing = Read-GitHubApi "repos/$env:GH_REPO/releases/tags/$env:RELEASE_TAG"
+            if ($existing.Status -ne 404) { throw '同名 Release 已存在，拒绝覆盖。' }
+            # The tag endpoint covers published releases; the authenticated list also includes drafts.
+            for ($page = 1; $page -le 20; $page++) {
+              $result = Read-GitHubApi "repos/$env:GH_REPO/releases?per_page=100&page=$page"
+              if ($result.Status -ne 200) { throw '无法查询草稿 Release，停止发布。' }
+              $releases = $(if ($null -eq $result.Body) { @() } else { @($result.Body) })
+              if (@($releases | Where-Object tag_name -CEQ $env:RELEASE_TAG).Count -gt 0) { throw '同名 Release 或草稿已存在，拒绝覆盖。' }
+              if (@($releases).Count -lt 100) { return }
+            }
+            throw 'Release 查询超过分页上限，无法确认无同名草稿，停止发布。'
+          }
+          $manifest = Get-Content -Raw -LiteralPath release-assets/release-manifest.json | ConvertFrom-Json
+          if ($manifest.schemaVersion -ne 1 -or $manifest.protocolVersion -ne 1 -or $env:RELEASE_TAG -cne "v$($manifest.version)" -or $manifest.version -cne $env:EXPECTED_VERSION -or $manifest.repository -cne $env:GH_REPO) { throw '发行清单身份不符。' }
+          foreach ($entry in @($manifest.artifacts.connector, $manifest.artifacts.extension)) {
+            if ($entry.fileName -notmatch '^[A-Za-z0-9._-]+\.zip$') { throw '发行文件名无效。' }
+            $file = Join-Path release-assets $entry.fileName
+            if ((Get-Item -LiteralPath $file).Length -ne $entry.sizeBytes -or (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -cne $entry.sha256) { throw '发行包大小或 SHA-256 不符。' }
+            $expected = "https://github.com/$env:GH_REPO/releases/download/$env:RELEASE_TAG/$($entry.fileName)"
+            if ($entry.url -cne $expected) { throw '发行包 URL 不符。' }
+          }
+          Assert-TagCommit
+          Assert-NoRelease
+          $notes = @"
+          本地 Chrome API 桥接开发预览版。
+
+          - 扩展 ZIP 用于解压加载或后续商店上传，不代表已在 Chrome Web Store 上架。
+          - Windows x64 连接器由 OmniTrigger 插件入口按需安装，或按包内 README 手动注册。
+          - release-manifest.json 提供版本、协议、下载地址、大小与 SHA-256；SHA256SUMS.txt 供独立核验。
+          - 程序未经代码签名；事件订阅与 callback-only API 尚未实现。
+          "@
+          $notes | Set-Content -LiteralPath release-notes.md -Encoding utf8NoBOM
+          $assets = @(Get-ChildItem -LiteralPath release-assets -File | ForEach-Object FullName)
+          if ($assets.Count -ne 4) { throw '发行产物数不符。' }
+          & gh release create $env:RELEASE_TAG @assets --repo $env:GH_REPO --verify-tag --draft --prerelease --latest=false --title "OmniTrigger Browser $($manifest.version)" --notes-file release-notes.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & gh release download $env:RELEASE_TAG --repo $env:GH_REPO --dir verified-assets
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($file in Get-ChildItem -LiteralPath release-assets -File) {
+            $downloaded = Join-Path verified-assets $file.Name
+            if ((Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $downloaded -Algorithm SHA256).Hash) { throw "上传后的发行资产校验失败：$($file.Name)" }
+          }
+          Assert-TagCommit
+          & gh release edit $env:RELEASE_TAG --repo $env:GH_REPO --draft=false --prerelease --latest=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

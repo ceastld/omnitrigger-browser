@@ -1,0 +1,10 @@
+:root { color-scheme: light dark; font: 14px/1.5 system-ui, sans-serif; }
+body { width: 320px; margin: 0; padding: 20px; }
+h1 { font-size: 18px; margin: 0 0 12px; }
+p { overflow-wrap: anywhere; }
+label { display: block; }
+input { box-sizing: border-box; width: 100%; margin: 6px 0 12px; padding: 7px; font: inherit; }
+.buttons { display: flex; gap: 8px; }
+button { padding: 7px 12px; font: inherit; cursor: pointer; }
+.label, .hint { font-size: 12px; opacity: .75; }
+code { font-size: 12px; overflow-wrap: anywhere; }

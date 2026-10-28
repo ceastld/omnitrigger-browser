@@ -1,0 +1,68 @@
+name: 检查
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows Rust 与 Chrome RPC 测试
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: 安装固定 Rust 工具链
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal --component rustfmt --component clippy
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup override set 1.90.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: 格式
+        run: cargo fmt --check
+      - name: Rust 测试
+        run: cargo test --locked
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: 构建真实桥接服务
+        run: |
+          cargo build --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $binary = (Resolve-Path -LiteralPath 'target/debug/omnitrigger-browser.exe').Path
+          "OMNITRIGGER_BROWSER_BIN=$binary" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: JS 与真实 Rust bridge 进程集成测试
+        run: |
+          if (-not (Test-Path -LiteralPath $env:OMNITRIGGER_BROWSER_BIN -PathType Leaf)) { throw '缺少真实 bridge，拒绝跳过集成测试。' }
+          $output = & node --test extension/tests/*.test.mjs tests/*.test.mjs
+          $code = $LASTEXITCODE
+          $output | Write-Output
+          if ($code -ne 0) { exit $code }
+          if (($output -join "`n") -match '(?m)^# skipped [1-9][0-9]*\s*$') { throw 'JS 测试包含跳过项，检查未通过。' }
+      - name: 第三方许可
+        run: ./scripts/collect-licenses.ps1 -Check
+      - name: Windows PowerShell 注册与冲突保护
+        run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File installer/tests/registration.tests.ps1
+      - name: 真实 CLI 空 ID 配置与结构化注册错误
+        run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File installer/tests/registration-cli.tests.ps1 -BinaryPath $env:OMNITRIGGER_BROWSER_BIN
+      - name: 发布标签与 API 错误保护
+        run: ./release/test-release-guards.ps1
+      - name: 扩展打包检查
+        run: ./scripts/package-extension.ps1
+      - name: 差异检查
+        run: git diff --check

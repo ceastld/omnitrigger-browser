@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>OmniTrigger Browser</title><link rel="stylesheet" href="popup.css"></head>
+<body><h1>OmniTrigger Browser</h1><p id="status">正在读取连接状态…</p>
+<label>浏览器名称<input id="name" maxlength="80"></label>
+<div class="buttons"><button id="save">保存名称</button><button id="toggle">连接</button></div>
+<p class="label">扩展 ID（安装 Native Host 时使用）</p><code id="extension-id"></code>
+<p class="hint">本机桥接服务运行后，可从本地直接调用 Chrome 书签 API。</p>
+<script type="module" src="popup.mjs"></script></body></html>

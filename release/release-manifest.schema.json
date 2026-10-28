@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OmniTrigger Browser release manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "protocolVersion", "repository", "artifacts"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "protocolVersion": { "const": 1 },
+    "repository": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+    "artifacts": {
+      "type": "object", "additionalProperties": false, "required": ["connector", "extension"],
+      "properties": {
+        "connector": { "$ref": "#/$defs/connector" },
+        "extension": { "$ref": "#/$defs/artifact" }
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object", "required": ["fileName", "url", "sha256", "sizeBytes"],
+      "properties": {
+        "fileName": { "type": "string", "pattern": "^[A-Za-z0-9._-]+\\.zip$" },
+        "url": { "type": "string", "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+/[^/]+\\.zip$" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "sizeBytes": { "type": "integer", "minimum": 1 },
+        "target": { "const": "x86_64-pc-windows-msvc" }
+      },
+      "additionalProperties": false
+    },
+    "connector": { "allOf": [{ "$ref": "#/$defs/artifact" }, { "required": ["target"] }] }
+  }
+}

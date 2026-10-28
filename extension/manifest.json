@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "minimum_chrome_version": "120",
+  "name": "OmniTrigger Browser",
+  "version": "0.1.0",
+  "description": "将本机 Chrome API 调用转发到浏览器，支持书签读取。",
+  "background": { "service_worker": "background.mjs", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_title": "OmniTrigger Browser 连接" },
+  "permissions": ["nativeMessaging", "bookmarks", "storage", "alarms"],
+  "incognito": "not_allowed"
+}
