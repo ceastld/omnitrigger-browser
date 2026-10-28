@@ -127,7 +127,8 @@ $index = [ordered]@{
     cargo_lock_sha256=(Hash-Bytes ([IO.File]::ReadAllBytes((Join-Path $repoRoot 'Cargo.lock'))))
     scope='normal-and-build-dependencies'; packages=$entries.ToArray()
 }
-$indexText = ($index | ConvertTo-Json -Depth 15) + [Environment]::NewLine
+# Git and CI use LF for this generated JSON; original license bytes stay untouched.
+$indexText = (($index | ConvertTo-Json -Depth 15) -replace "\r\n?", "`n") + "`n"
 $indexPath = Join-Path $outputRoot 'index.json'
 Assert-LocalOrdinaryPath $indexPath
 if ($Check) {
