@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# 许可索引按原始字节校验；不得被 Windows Git 自动改写。
+third-party/** -text
+Cargo.lock -text
