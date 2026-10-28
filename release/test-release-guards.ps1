@@ -69,3 +69,5 @@ try {
 } finally {
     foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
 }
+# GitHub's pwsh wrapper propagates LASTEXITCODE; expected mocked failures must not leak it.
+$global:LASTEXITCODE = 0
