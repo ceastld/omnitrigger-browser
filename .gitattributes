@@ -2,4 +2,5 @@
 
 # 许可索引按原始字节校验；不得被 Windows Git 自动改写。
 third-party/** -text
+third-party/index.json text eol=lf
 Cargo.lock -text
