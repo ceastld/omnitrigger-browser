@@ -27,6 +27,15 @@ function Get-ReleaseVersion([string]$Root) {
     return [string]$packages[0].version
 }
 
+function Get-ReleaseExtensionIdentity([string]$Root) {
+    $script = Assert-LocalPackagePath (Join-Path $Root 'scripts/extension-identity.mjs')
+    $identity = & node $script | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or $identity.schemaVersion -ne 1 -or $identity.extensionId -notmatch '^[a-p]{32}$' -or $identity.publicKeySha256 -notmatch '^[a-f0-9]{64}$') {
+        throw '扩展公开 key 与固定身份校验失败。'
+    }
+    return $identity
+}
+
 function Write-PackageZip([string]$Path, [System.Collections.IDictionary]$Files) {
     $zipPath = Assert-LocalPackagePath $Path
     $null = [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($zipPath))

@@ -11,6 +11,7 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repoRoot 'dist' }
 $outputRoot = Assert-LocalPackagePath $OutputDirectory
 $version = Get-ReleaseVersion $repoRoot
+$identity = Get-ReleaseExtensionIdentity $repoRoot
 $null = [IO.Directory]::CreateDirectory($outputRoot)
 
 Push-Location -LiteralPath $repoRoot
@@ -63,6 +64,7 @@ $connectorMetadataPath = Join-Path $metadataDirectory 'connector.json'
 $encoding = [Text.UTF8Encoding]::new($false)
 $connectorMetadata = [ordered]@{
     schemaVersion = 1; version = $version; protocolVersion = 1
+    extensionId = $identity.extensionId
     hostName = 'com.omnitrigger.browser'; target = $Target
     entrypoints = [ordered]@{ cli = 'omnitrigger-browser.exe'; nativeHost = 'omnitrigger-browser-host.exe' }
 }
@@ -70,9 +72,11 @@ $connectorMetadata = [ordered]@{
 $files['connector.json'] = $connectorMetadataPath
 $connector = Write-PackageZip (Join-Path $outputRoot "OmniTrigger-Browser-Connector-$version-windows-x86_64.zip") $files
 $extension = & (Join-Path $PSScriptRoot 'package-extension.ps1') -OutputDirectory $outputRoot
+if ($extension.ExtensionId -cne $identity.extensionId) { throw '打包过程中扩展身份发生变化，停止发布。' }
 $baseUrl = "https://github.com/$Repository/releases/download/v$version"
 $manifest = [ordered]@{
     schemaVersion = 1; version = $version; protocolVersion = 1; repository = $Repository
+    extensionId = $identity.extensionId
     artifacts = [ordered]@{
         connector = [ordered]@{ fileName = $connector.FileName; url = "$baseUrl/$($connector.FileName)"; sha256 = $connector.Sha256; sizeBytes = $connector.SizeBytes; target = $Target }
         extension = [ordered]@{ fileName = $extension.FileName; url = "$baseUrl/$($extension.FileName)"; sha256 = $extension.Sha256; sizeBytes = $extension.SizeBytes }
@@ -87,6 +91,7 @@ $checksumLines = @($connector.Path, $extension.Path, $manifestPath) | ForEach-Ob
 Write-Host "连接器已打包：$($connector.FileName)，$($connector.SizeBytes) 字节。"
 $summary = [ordered]@{
     version = $version; manifestPath = $manifestPath
+    extensionId = $identity.extensionId
     connectorZipBytes = $connector.SizeBytes; extensionZipBytes = $extension.SizeBytes
     binaries = $binarySizes; connectorEntryCount = $connector.EntryCount
 }

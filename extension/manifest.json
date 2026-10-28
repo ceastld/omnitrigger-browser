@@ -4,8 +4,20 @@
   "name": "OmniTrigger Browser",
   "version": "0.1.0",
   "description": "将本机 Chrome API 调用转发到浏览器，支持书签读取。",
-  "background": { "service_worker": "background.mjs", "type": "module" },
-  "action": { "default_popup": "popup.html", "default_title": "OmniTrigger Browser 连接" },
-  "permissions": ["nativeMessaging", "bookmarks", "storage", "alarms"],
-  "incognito": "not_allowed"
+  "background": {
+    "service_worker": "background.mjs",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "OmniTrigger Browser 连接"
+  },
+  "permissions": [
+    "nativeMessaging",
+    "bookmarks",
+    "storage",
+    "alarms"
+  ],
+  "incognito": "not_allowed",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzVNaoZRveZShovaZtpdUD0KWKTwYbefrVcim1LZb6NTgXxOkrjop5FDv6cKc56WksmkFiS+t8TMdkB5Hb9Hsk3gHorCkOi9TN62a4CaUWbNPZqFLaGFnQll2w6Yna32Y2uDUDUhLze9BlBEIy8Q5yHsFNi5TrDjPBsrS2vNI4eUp1rYDFg0/5zODiZNQxhKD6+FaaniF8hrrMkCmLOnLcA+DtFafnSvGAEXkhcNwZuobr6azSmhJRzApAP/JucPH4bYXNgquFmamhE5rKLHsB94+fOa+ilUqldRS26T1k5tSS6okF/J9Hgj4FfrrHde6ntTc45B97iiOUH44FvQDOwIDAQAB"
 }

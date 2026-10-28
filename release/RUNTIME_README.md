@@ -10,10 +10,11 @@ Windows x64 开发预览版，提供本地到 Chrome 扩展的通用 API RPC。
 
 ## 手动注册
 
-将整个连接器 ZIP 解压到普通本地目录，保留许可和目录结构。在 Chrome 加载扩展后，复制其 32 位扩展 ID，运行：
+将整个连接器 ZIP 解压到普通本地目录，保留许可和目录结构。扩展有固定公开身份，手动注册也可直接读取随包元数据，无需复制 ID：
 
 ```powershell
-.\installer\install.ps1 -ExtensionId '实际扩展ID'
+$id = (Get-Content -Raw .\connector.json | ConvertFrom-Json).extensionId
+.\installer\install.ps1 -ExtensionId $id
 & "$env:LOCALAPPDATA\OmniTriggerBrowser\omnitrigger-browser.exe" serve
 ```
 

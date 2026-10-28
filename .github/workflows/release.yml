@@ -26,6 +26,7 @@ jobs:
     outputs:
       commit: ${{ steps.identity.outputs.commit }}
       version: ${{ steps.identity.outputs.version }}
+      extensionId: ${{ steps.identity.outputs.extensionId }}
     defaults:
       run:
         shell: pwsh
@@ -33,6 +34,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
       - name: 固定 Rust 工具链
         run: |
           rustup toolchain install 1.90.0 --profile minimal
@@ -54,6 +58,9 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[a-f0-9]{40}$') { throw '无法确定实际构建提交。' }
           "commit=$commit" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          $identity = & node scripts/extension-identity.mjs | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $identity.extensionId -notmatch '^[a-p]{32}$') { throw '扩展固定身份无效。' }
+          "extensionId=$($identity.extensionId)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
       - name: 构建、核验许可、打包与哈希
         env:
           RELEASE_REPOSITORY: ${{ github.repository }}
@@ -101,6 +108,7 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           EXPECTED_COMMIT: ${{ needs.package.outputs.commit }}
           EXPECTED_VERSION: ${{ needs.package.outputs.version }}
+          EXPECTED_EXTENSION_ID: ${{ needs.package.outputs.extensionId }}
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $false
@@ -145,6 +153,7 @@ jobs:
           }
           $manifest = Get-Content -Raw -LiteralPath release-assets/release-manifest.json | ConvertFrom-Json
           if ($manifest.schemaVersion -ne 1 -or $manifest.protocolVersion -ne 1 -or $env:RELEASE_TAG -cne "v$($manifest.version)" -or $manifest.version -cne $env:EXPECTED_VERSION -or $manifest.repository -cne $env:GH_REPO) { throw '发行清单身份不符。' }
+          if ($manifest.extensionId -notmatch '^[a-p]{32}$' -or $manifest.extensionId -cne $env:EXPECTED_EXTENSION_ID) { throw '发行清单扩展身份与构建不一致。' }
           foreach ($entry in @($manifest.artifacts.connector, $manifest.artifacts.extension)) {
             if ($entry.fileName -notmatch '^[A-Za-z0-9._-]+\.zip$') { throw '发行文件名无效。' }
             $file = Join-Path release-assets $entry.fileName

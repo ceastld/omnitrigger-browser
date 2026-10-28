@@ -25,7 +25,7 @@
 
 ## 本地打包
 
-需要 PowerShell 7、Windows x64 MSVC Rust 工具链和锁定依赖，运行：
+需要 PowerShell 7、Node.js 22、Windows x64 MSVC Rust 工具链和锁定依赖，运行：
 
 ```powershell
 .\scripts\package-extension.ps1
@@ -44,9 +44,11 @@ Windows 脚本通过 Cargo 本次构建回执定位 EXE，不假定 `target` 目
 https://github.com/ceastld/omnitrigger-browser/releases/download/v0.1.0/release-manifest.json
 ```
 
-`artifacts.connector` 与 `artifacts.extension` 分别提供 `fileName`、`url`、`sizeBytes` 和小写 `sha256`；连接器另有 `target: x86_64-pc-windows-msvc`。下载方先核对清单的版本、协议和仓库，再校验 ZIP 的完整大小与哈希，不能把 latest 或变动 URL 当作固定版本。schema 主版本未知时拒绝安装。
+`artifacts.connector` 与 `artifacts.extension` 分别提供 `fileName`、`url`、`sizeBytes` 和小写 `sha256`；连接器另有 `target: x86_64-pc-windows-msvc`。顶层 `extensionId` 来自已校验的固定公开身份，供 OmniTrigger 一键安装时自动注册，无需用户输入 ID。下载方先核对清单的版本、协议和仓库，再校验 ZIP 的完整大小与哈希，不能把 latest 或变动 URL 当作固定版本。schema 主版本未知时拒绝安装。
 
-连接器 ZIP 根的 `connector.json` 提供 `schemaVersion`、`protocolVersion`、`version`、`target`、`hostName` 及固定相对 `entrypoints`。`entrypoints.cli` 为 `omnitrigger-browser.exe`，`entrypoints.nativeHost` 为 `omnitrigger-browser-host.exe`。ZIP 路径均为相对路径，无外层版本目录。OmniTrigger 可自行注册经过校验的程序，无需执行下载包中的安装脚本。
+连接器 ZIP 根的 `connector.json` 提供 `schemaVersion`、`protocolVersion`、`version`、`extensionId`、`target`、`hostName` 及固定相对 `entrypoints`。`entrypoints.cli` 为 `omnitrigger-browser.exe`，`entrypoints.nativeHost` 为 `omnitrigger-browser-host.exe`。ZIP 路径均为相对路径，无外层版本目录。OmniTrigger 可自行注册经过校验的程序，无需执行下载包中的安装脚本。
+
+扩展 `manifest.json` 内固定公开 `key`，其派生 ID 在 `extension/identity.json` 中记录；不同解压路径仍使用同一扩展 ID。打包前运行 `scripts/extension-identity.mjs` 验证公开 key、ID 和哈希，随后自动写入两个发行清单；CI 测试覆盖派生算法与身份不匹配。公开 key 不含私钥。改变它会改变扩展身份，不能作为普通更新随意替换。
 
 私有仓库的 Release 不提供匿名下载；若连接器面向普通 OmniTrigger 用户，发行资产必须对目标用户可访问。访问令牌不嵌入程序或清单。公开范围、提交、推送和标签创建仍由维护者授权后执行。
 

@@ -3,12 +3,13 @@
   "title": "OmniTrigger Browser release manifest v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "version", "protocolVersion", "repository", "artifacts"],
+  "required": ["schemaVersion", "version", "protocolVersion", "repository", "extensionId", "artifacts"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
     "protocolVersion": { "const": 1 },
     "repository": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+    "extensionId": { "type": "string", "pattern": "^[a-p]{32}$" },
     "artifacts": {
       "type": "object", "additionalProperties": false, "required": ["connector", "extension"],
       "properties": {

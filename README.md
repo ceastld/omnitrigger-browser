@@ -29,9 +29,9 @@ try {
 
 从 [GitHub Releases](https://github.com/ceastld/omnitrigger-browser/releases) 取得独立 Chrome 扩展 ZIP、Windows 连接器 ZIP、`release-manifest.json` 和校验和。连接器包含两个 EXE、SDK、注册脚本和许可，无需 Rust 或 Node 即可安装运行。
 
-OmniTrigger 的“动作库 → 插件设置 → 浏览器连接器”提供固定版本下载、离线包校验安装、扩展 ID 注册、启停和卸载。连接器按需下载，不随主程序默认打包。在 Chrome 加载扩展并取得 ID 后，在主程序保存注册、启用连接器。
+在 OmniTrigger 的动作库找到“浏览器连接器”，点击“安装”即可。程序自动完成下载、本机配置和启动；成功后显示“已安装”，无需填写路径或扩展 ID。连接器按需下载，不随主程序默认打包。
 
-OmniTrigger 插件使用独立 pipe 和版本目录。JS 调用请使用安装卡片的“复制 JS 调用示例”，其中显式指定插件 `configPath`；SDK 默认的 `%LOCALAPPDATA%\\OmniTriggerBrowser` 仍属于手动安装位置，不自动切换到插件目录。
+浏览器扩展仍在 Chrome 侧安装；公开发布包具有固定身份，不随解压目录改变。应用层和开发脚本通过同一 RPC 客户端使用这些能力，接口见 [SDK 说明](sdk-js/README.md)。
 
 完整解压连接器 ZIP 后，也可运行 `installer/install.ps1` 独立安装；不填 ID 可先安装文件，之后通过 CLI 的 `register --extension-id` 注册。这一步不构建源码、不自动启动服务，已有其他安装时明确报冲突。CI、发行资产和本地打包命令见[发布说明](docs/RELEASING.md)。
 
