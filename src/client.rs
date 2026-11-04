@@ -28,6 +28,52 @@ impl From<io::Error> for RpcError {
     }
 }
 
+/// 脚本适配使用的完整错误；保留旧 RpcError 的公开字段与构造方式。
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CallError {
+    #[serde(flatten)]
+    pub fault: RpcError,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_permissions: Vec<String>,
+}
+impl fmt::Display for CallError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fault.fmt(formatter)
+    }
+}
+impl std::error::Error for CallError {}
+impl From<RpcError> for CallError {
+    fn from(fault: RpcError) -> Self {
+        Self {
+            fault,
+            required_permissions: Vec::new(),
+        }
+    }
+}
+impl From<io::Error> for CallError {
+    fn from(error: io::Error) -> Self {
+        RpcError::from(error).into()
+    }
+}
+
+fn decode_response(response: Value) -> io::Result<Result<Option<Value>, CallError>> {
+    match response["ok"].as_bool() {
+        Some(true) => match response["has_value"].as_bool() {
+            Some(false) => Ok(Ok(None)),
+            Some(true) => response
+                .get("value")
+                .cloned()
+                .map(|value| Ok(Some(value)))
+                .ok_or_else(|| invalid("成功回执缺少 value")),
+            None => Err(invalid("成功回执缺少 has_value")),
+        },
+        Some(false) => serde_json::from_value(response["error"].clone())
+            .map(Err)
+            .map_err(|_| invalid("错误回执格式无效")),
+        None => Err(invalid("回执缺少 ok")),
+    }
+}
+
 /// A sequential Rust connection. Independent connections and JS SDK support concurrent calls.
 pub struct BrowserClient {
     stream: Option<platform::Client>,
@@ -53,7 +99,10 @@ impl BrowserClient {
     }
 
     pub async fn profiles(&mut self) -> Result<Value, RpcError> {
-        self.request(json!({"v":1,"type":"profiles"}), 5000).await
+        self.request(json!({"v":1,"type":"profiles"}), 5000)
+            .await
+            .map(|value| value.unwrap_or(Value::Null))
+            .map_err(|error| error.fault)
     }
 
     pub async fn call(
@@ -62,6 +111,20 @@ impl BrowserClient {
         args: Value,
         timeout_ms: u64,
     ) -> Result<Value, RpcError> {
+        self.call_value(method, args, timeout_ms)
+            .await
+            .map(|value| value.unwrap_or(Value::Null))
+            .map_err(|error| error.fault)
+    }
+
+    /// None 表示 JavaScript undefined，Some(Value::Null) 表示 JSON null。
+    /// 与 call 共用连接、请求身份和分块接收；不自动重试副作用调用。
+    pub async fn call_value(
+        &mut self,
+        method: &str,
+        args: Value,
+        timeout_ms: u64,
+    ) -> Result<Option<Value>, CallError> {
         if !args.is_array() || !(1..=60_000).contains(&timeout_ms) {
             return Err(invalid("参数必须是 JSON 数组，超时为 1..60000 毫秒").into());
         }
@@ -73,7 +136,11 @@ impl BrowserClient {
         self.request(call, timeout_ms + 1000).await
     }
 
-    async fn request(&mut self, mut message: Value, timeout_ms: u64) -> Result<Value, RpcError> {
+    async fn request(
+        &mut self,
+        mut message: Value,
+        timeout_ms: u64,
+    ) -> Result<Option<Value>, CallError> {
         self.next += 1;
         let id = format!("rust:{}", self.next);
         message["id"] = id.clone().into();
@@ -82,18 +149,12 @@ impl BrowserClient {
         let is_call = message["type"] == "call";
         let result = tokio::time::timeout(Duration::from_millis(timeout_ms), async {
             framing::write(stream, &message).await?;
-            receive(stream, &id).await
+            decode_response(receive(stream, &id).await?)
         })
         .await;
         // A cancelled read_exact may have consumed a partial frame: never reuse this transport.
         match result {
-            Ok(Ok(response)) if response["ok"] == true => Ok(if response["has_value"] == true {
-                response["value"].clone()
-            } else {
-                Value::Null
-            }),
-            Ok(Ok(response)) => Err(serde_json::from_value(response["error"].clone())
-                .unwrap_or_else(|_| RpcError::from(invalid("错误回执格式无效")))),
+            Ok(Ok(response)) => response,
             Ok(Err(error)) => {
                 self.stream = None;
                 if is_call {
@@ -101,7 +162,8 @@ impl BrowserClient {
                         code: "result_unknown".into(),
                         message: error.to_string(),
                         effect_state: Some("unknown".into()),
-                    })
+                    }
+                    .into())
                 } else {
                     Err(error.into())
                 }
@@ -112,7 +174,8 @@ impl BrowserClient {
                     code: "result_unknown".into(),
                     message: "调用超时，连接已关闭，未自动重试".into(),
                     effect_state: Some("unknown".into()),
-                })
+                }
+                .into())
             }
         }
     }
@@ -187,6 +250,38 @@ async fn receive(stream: &mut platform::Client, id: &str) -> io::Result<Value> {
                 );
             }
             _ => return Err(invalid("未知结果消息")),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn script_result_distinguishes_undefined_null_and_permission_details() {
+        assert_eq!(
+            decode_response(json!({"ok":true,"has_value":false}))
+                .unwrap()
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            decode_response(json!({"ok":true,"has_value":true,"value":null}))
+                .unwrap()
+                .unwrap(),
+            Some(Value::Null)
+        );
+        let error = decode_response(json!({"ok":false,"error":{"code":"permission_required","message":"missing","effect_state":"not_started","required_permissions":["bookmarks"]}})).unwrap().unwrap_err();
+        assert_eq!(error.fault.code, "permission_required");
+        assert_eq!(error.fault.effect_state.as_deref(), Some("not_started"));
+        assert_eq!(error.required_permissions, vec!["bookmarks"]);
+        for response in [
+            json!({"ok":true,"value":null}),
+            json!({"ok":true,"has_value":true}),
+            json!({"ok":false,"error":{}}),
+        ] {
+            assert!(decode_response(response).is_err());
         }
     }
 }
