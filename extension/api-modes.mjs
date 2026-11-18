@@ -23,5 +23,6 @@ for (const area of ['local', 'sync', 'session', 'managed']) {
     for (const method of ['set', 'remove', 'clear']) API_MODES[`storage.${area}.${method}`] = 'promise';
   }
 }
+API_MODES['bookmarks.getFavicons'] = 'promise';
 for (const method of ['getManifest', 'getURL']) API_MODES[`runtime.${method}`] = 'sync';
 Object.freeze(API_MODES);

@@ -21,7 +21,7 @@ async fn main() {
         let command = args.first().map(String::as_str).unwrap_or("help");
         if command == "endpoint" { println!("{}", platform::default_pipe()?); return Ok(()); }
         if command == "help" || command == "--help" || command == "-h" {
-            println!("OmniTrigger Browser 0.1.0\n\n  serve [--pipe PATH]\n  profiles [--pipe PATH]\n  call METHOD ARGS_JSON [--profile ID] [--timeout-ms 10000] [--pipe PATH]\n  register --extension-id ID[,ID] [--install-dir DIR] [--pipe PATH]\n  configure [--extension-id ID[,ID]] [--install-dir DIR] [--pipe PATH]\n  unregister [--install-dir DIR]\n  registration-status [--install-dir DIR]\n  endpoint\n\n例如：call bookmarks.getTree '[]'\n当前为 Windows 开发原型；调用真实浏览器 API，不自动重试。");
+            println!("OmniTrigger Browser {}\n\n  serve [--pipe PATH]\n  profiles [--pipe PATH]\n  call METHOD ARGS_JSON [--profile ID] [--timeout-ms 10000] [--pipe PATH]\n  register --extension-id ID[,ID] [--install-dir DIR] [--pipe PATH]\n  configure [--extension-id ID[,ID]] [--install-dir DIR] [--pipe PATH]\n  unregister [--install-dir DIR]\n  registration-status [--install-dir DIR]\n  endpoint\n\n例如：call bookmarks.getTree '[]'\n当前为 Windows 开发原型；调用真实浏览器 API，不自动重试。", env!("CARGO_PKG_VERSION"));
             return Ok(());
         }
         if matches!(command, "configure" | "register" | "unregister" | "registration-status") {

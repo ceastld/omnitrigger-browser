@@ -23,6 +23,10 @@ export function resolveChromeMethod(chromeApi, method) {
   if (parts.length < 2 || parts.some(part => !/^[A-Za-z][A-Za-z0-9_]*$/.test(part) || forbidden.has(part))) {
     throw new RpcFault('invalid_request', 'Chrome API 方法路径无效。');
   }
+  if (method === 'bookmarks.getFavicons' && typeof chromeApi.bookmarks?.get === 'function'
+      && typeof chromeApi.runtime?.getURL === 'function') {
+    return { owner: chromeApi, fn: bookmarkFavicons, mode: 'promise' };
+  }
   let owner = chromeApi;
   for (const part of parts.slice(0, -1)) {
     if (!owner || !Object.hasOwn(owner, part)) {
@@ -69,6 +73,40 @@ function toBase64(bytes) {
   let binary = '';
   for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
   return btoa(binary);
+}
+
+// Chrome resolves the URL against the current profile's local favicon cache.
+async function bookmarkFavicons(ids) {
+  if (!Array.isArray(ids) || ids.length > 24
+      || ids.some(id => typeof id !== 'string' || !/^[0-9]{1,32}$/.test(id))) {
+    throw new RpcFault('invalid_request', '传入的书签 ID 无效，单次最多读取 24 个图标。');
+  }
+  const readIcon = async pageUrl => {
+    const url = new URL(this.runtime.getURL('_favicon/'));
+    url.search = new URLSearchParams({pageUrl, size: '32'}).toString();
+    const response = await fetch(url, { redirect: 'error' });
+    if (!response.ok) return null;
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    // Chrome may omit Content-Type on this internal extension resource.
+    const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    return bytes.length >= 24 && bytes.length <= 8192 && png.every((byte, index) => bytes[index] === byte)
+      ? toBase64(bytes) : null;
+  };
+  if (!ids.length) return {};
+  // Chromium serves its default globe as PNG for cache misses.
+  const missing = await readIcon('https://bookmark-favicon-cache-miss.invalid/');
+  const pairs = await Promise.all([...new Set(ids)].map(async id => {
+    try {
+      const [node] = await this.bookmarks.get(id);
+      if (!/^https?:[/][/]/i.test(node?.url ?? '')) return null;
+      const icon = await readIcon(node.url);
+      return icon && icon !== missing ? [id, icon] : null;
+    } catch {
+      // A bookmark deleted after the tree was read does not invalidate the batch.
+      return null;
+    }
+  }));
+  return Object.fromEntries(pairs.filter(Boolean));
 }
 
 function raceAbort(promise, signal) {

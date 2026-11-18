@@ -11,6 +11,8 @@ Native Host 连接同一 pipe，以 role=extension 握手，转发扩展的 hell
 bridge 将请求 id 改为自身唯一 ID，添加 session_id，再转发；结果返回客户端时还原原 ID。
 
 方法不带 chrome. 前缀，例如 bookmarks.getTree，参数为 []。普通结果为 `{v:1,type:"result",id,session_id,ok:true,has_value:true,value:...}`；undefined 用 has_value:false。
+
+扩展方法 `bookmarks.getFavicons` 接收 `[["书签 ID", ...]]`，每次最多 24 项。扩展按当前配置下的书签 ID 查找本地缓存，返回 `{ "书签 ID": "base64 PNG" }`。无缓存、已删除的书签和非 HTTP(S) 条目不出现在返回值中。支持此方法的扩展在 `capabilities.methods` 中公布它。
 错误为 `{v:1,type:"result",id,ok:false,error:{code,message,effect_state:"not_started"|"unknown"}}`。effect_state 只表示本次派发是否已尝试，不证明浏览器回滚。方法错误 chrome_error；不可用 api_unavailable；协议错误 invalid_request；忙碌 busy；断线后已派发 result_unknown。没有自动重试。
 
 超过单帧的结果：先把普通成功 result 的 value 序列化为 UTF-8 JSON 字节。

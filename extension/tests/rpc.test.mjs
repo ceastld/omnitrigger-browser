@@ -20,6 +20,29 @@ test('getTree and search preserve owner, argument array and original result', as
   assert.equal(h.messages[1].value[0].title, '中文');
 });
 
+test('bookmark icons accept headerless PNGs and omit the Chromium fallback', async t => {
+  const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  const icon = Buffer.from([...png, ...Array(16).fill(1)]);
+  const fallback = Buffer.from([...png, ...Array(16).fill(0)]);
+  const h = harness({
+    runtime: { getURL: path => 'chrome-extension://test/' + path },
+    bookmarks: { async get(id) {
+      if (id === '3') throw new Error('bookmark removed');
+      return [{ url: id === '1' ? 'https://cached.test/' : 'https://uncached.test/' }];
+    } },
+  });
+  t.mock.method(globalThis, 'fetch', url => {
+    assert.equal(url.protocol, 'chrome-extension:');
+    assert.equal(url.pathname, '/_favicon/');
+    const bytes = url.searchParams.get('pageUrl') === 'https://cached.test/' ? icon : fallback;
+    return new Response(bytes);
+  });
+  await h.call('bookmarks.getFavicons', [['1', '2', '3']]);
+  assert.deepEqual(h.messages[0].value, { 1: icon.toString('base64') });
+  await h.call('bookmarks.getFavicons', [Array(25).fill('1')]);
+  assert.equal(h.messages[1].error.code, 'invalid_request');
+});
+
 test('synchronous JSON and undefined are distinct from null', async () => {
   const h = harness({ runtime: { getManifest: () => ({ version: '0.1.0' }) }, bookmarks: { remove: async () => undefined, getTree: async () => null } });
   await h.call('runtime.getManifest');
