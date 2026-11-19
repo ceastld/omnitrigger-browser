@@ -29,7 +29,7 @@ try {
 
 ClipHost 的「超级菜单 → 书签 → 扩展安装指南」指向本节。请使用 **0.1.1 或更新的扩展**读取书签和网站图标。
 
-1. 从 [OmniTrigger Browser 0.1.1](https://github.com/ceastld/omnitrigger-browser/releases/tag/v0.1.1) 下载 **OmniTrigger-Browser-Extension-0.1.1.zip**，解压到准备长期保留的本机目录。在要读取书签的 Chrome 配置里打开「管理扩展程序」，启用「开发者模式」，用「加载已解压的扩展程序」选择包含 manifest.json 的目录。已加载旧版解压扩展时，可以将新版文件解压到原目录后点击该扩展的「重新加载」。扩展使用固定 ID。
+1. 从 [OmniTrigger Browser 0.1.2](https://github.com/ceastld/omnitrigger-browser/releases/tag/v0.1.2) 下载 **OmniTrigger-Browser-Extension-0.1.2.zip**，解压到准备长期保留的本机目录。在要读取书签的 Chrome 配置里打开「管理扩展程序」，启用「开发者模式」，用「加载已解压的扩展程序」选择包含 manifest.json 的目录。已加载旧版解压扩展时，可以将新版文件解压到原目录后点击该扩展的「重新加载」。扩展使用固定 ID。
 2. 启动本机连接器。已在 OmniTrigger 动作库安装并启动「浏览器连接器」的用户可以直接复用。独立使用 ClipHost 时，在同一 Release 下载并完整解压 Windows 连接器 ZIP，在解压目录打开 PowerShell，执行：
 
    ~~~powershell
@@ -38,7 +38,7 @@ ClipHost 的「超级菜单 → 书签 → 扩展安装指南」指向本节。�
    & "$env:LOCALAPPDATA\OmniTriggerBrowser\omnitrigger-browser.exe" serve
    ~~~
 
-   保持连接器运行。点击 Chrome 工具栏中的「OmniTrigger Browser 连接」，确认显示「已连接本机桥接服务」。首次安装后也可重新加载扩展，让它立即重连。
+   保持连接器运行。点击 Chrome 工具栏中的「OmniTrigger Browser 连接」，确认弹窗显示「已连接」。首次安装后也可重新加载扩展，让它立即重连。
 3. 回到 ClipHost，重新打开「超级菜单 → 书签」。同时连接多个浏览器配置时，在书签齿轮菜单选择来源。
 
 扩展通过 Chrome 读取当前配置的书签树和本地缓存的网站图标。已有缓存可离线读取，缺失图标时显示通用书签图标。连接器包内含程序、SDK、注册脚本和许可，无需安装 Rust 或 Node。发行包校验与下载契约见[发布说明](docs/RELEASING.md)。

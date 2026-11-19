@@ -1,8 +1,55 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>OmniTrigger Browser</title><link rel="stylesheet" href="popup.css"></head>
-<body><h1>OmniTrigger Browser</h1><p id="status">正在读取连接状态…</p>
-<label>浏览器名称<input id="name" maxlength="80"></label>
-<div class="buttons"><button id="save">保存名称</button><button id="toggle">连接</button></div>
-<p class="label">扩展 ID（安装 Native Host 时使用）</p><code id="extension-id"></code>
-<p class="hint">本机桥接服务运行后，可从本地直接调用 Chrome 书签 API。</p>
-<script type="module" src="popup.mjs"></script></body></html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OmniTrigger Browser</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="brand">
+    <span class="brand-mark" aria-hidden="true"><span></span></span>
+    <h1>OmniTrigger Browser</h1>
+    <a class="help" href="https://github.com/ceastld/omnitrigger-browser#%E4%B8%8B%E8%BD%BD%E4%B8%8E%E6%8F%92%E4%BB%B6%E5%AE%89%E8%A3%85" target="_blank" rel="noopener noreferrer">安装指南</a>
+  </header>
+
+  <main>
+    <section class="connection" aria-labelledby="state">
+      <div class="connection-heading">
+        <h2 id="state" data-state="loading">正在读取</h2>
+        <button id="toggle" type="button" disabled>暂停连接</button>
+      </div>
+      <p id="status" role="status">正在读取本机连接状态…</p>
+    </section>
+
+    <div class="panels">
+      <details class="panel">
+        <summary>
+          <span>书签与网站图标</span>
+          <span class="panel-meta">默认授权</span>
+        </summary>
+        <div class="panel-content">
+          <p class="hint">连接后，ClipHost 和 OmniTrigger 可以读取书签和浏览器已缓存的网站图标。已有缓存可以离线读取。</p>
+        </div>
+      </details>
+
+      <details class="panel">
+        <summary>
+          <span>连接设置</span>
+          <span id="profile-name" class="panel-meta"></span>
+        </summary>
+        <form id="connection-settings" class="panel-content">
+          <label for="name">浏览器名称</label>
+          <div class="name-field">
+            <input id="name" maxlength="80" autocomplete="off" required>
+            <button id="save" type="submit">保存</button>
+          </div>
+          <p id="settings-note" class="feedback" role="status"></p>
+          <p class="extension-identity"><span>扩展 ID</span><code id="extension-id"></code></p>
+        </form>
+      </details>
+    </div>
+  </main>
+  <script type="module" src="popup.mjs"></script>
+</body>
+</html>
