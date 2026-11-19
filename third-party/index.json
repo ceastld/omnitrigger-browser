@@ -1,7 +1,7 @@
 {
   "format_version": 1,
   "target": "x86_64-pc-windows-msvc",
-  "cargo_lock_sha256": "eb0eca865b5154898c66f2c63da5f352bb6b7ab4e18f4d79673eeed2241d90c7",
+  "cargo_lock_sha256": "ca0abe22c4519a13dc1217ce248b09aadbdce111d110134f8072fb54cd1e4b81",
   "scope": "normal-and-build-dependencies",
   "packages": [
     {

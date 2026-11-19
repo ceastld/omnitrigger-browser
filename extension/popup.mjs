@@ -44,7 +44,8 @@ async function refreshConnection() {
     enabled = result.settings.bridgeEnabled;
     const phase = result.status.state;
     const phaseKnown = Object.hasOwn(connectionViews, phase);
-    showConnection(phaseKnown ? phase : 'disconnected', phaseKnown ? undefined : result.status.message);
+    const diagnostic = !phaseKnown || phase === 'disconnected' ? result.status.message : undefined;
+    showConnection(phaseKnown ? phase : 'disconnected', diagnostic);
     profileName.textContent = result.settings.browserName;
     if (name.value === savedName) name.value = result.settings.browserName;
     savedName = result.settings.browserName;

@@ -29,7 +29,7 @@ try {
 
 ClipHost 的「超级菜单 → 书签 → 扩展安装指南」指向本节。请使用 **0.1.1 或更新的扩展**读取书签和网站图标。
 
-1. 从 [OmniTrigger Browser 0.1.3](https://github.com/ceastld/omnitrigger-browser/releases/tag/v0.1.3) 下载 **OmniTrigger-Browser-Extension-0.1.3.zip**，解压到准备长期保留的本机目录。在要读取书签的 Chrome 配置里打开「管理扩展程序」，启用「开发者模式」，用「加载已解压的扩展程序」选择包含 manifest.json 的目录。已加载旧版解压扩展时，可以将新版文件解压到原目录后点击该扩展的「重新加载」。扩展使用固定 ID。
+1. 从 [OmniTrigger Browser 0.1.4](https://github.com/ceastld/omnitrigger-browser/releases/tag/v0.1.4) 下载 **OmniTrigger-Browser-Extension-0.1.4.zip**，解压到准备长期保留的本机目录。在要读取书签的 Chrome 配置里打开「管理扩展程序」，启用「开发者模式」，用「加载已解压的扩展程序」选择包含 manifest.json 的目录。已加载旧版解压扩展时，可以将新版文件解压到原目录后点击该扩展的「重新加载」。扩展使用固定 ID。
 2. 启动本机连接器。已在 OmniTrigger 动作库安装并启动「浏览器连接器」的用户可以直接复用。独立使用 ClipHost 时，在同一 Release 下载并完整解压 Windows 连接器 ZIP，在解压目录打开 PowerShell，执行：
 
    ~~~powershell

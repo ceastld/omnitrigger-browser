@@ -4,7 +4,7 @@ import { RpcSession, resolveChromeMethod } from './rpc.mjs';
 const HOST = 'com.omnitrigger.browser';
 const RETRY_ALARM = 'omnitrigger-browser-reconnect';
 let nativePort;
-let rpc;
+let closeConnection;
 let connecting;
 let retryTimer;
 let failures = 0;
@@ -37,13 +37,29 @@ async function connectIfEnabled() {
     }
     if (attemptGeneration !== generation) return;
     const sessionId = crypto.randomUUID();
+    let endConnection;
     try {
       const port = chrome.runtime.connectNative(HOST);
       nativePort = port;
-      rpc = new RpcSession({ chromeApi: chrome, sessionId, browserInstanceId: settings.browserInstanceId, send: message => port.postMessage(message) });
-      const session = rpc;
-      const handshakeTimer = setTimeout(() => {
-        if (nativePort === port) port.disconnect();
+      const session = new RpcSession({ chromeApi: chrome, sessionId, browserInstanceId: settings.browserInstanceId, send: message => port.postMessage(message) });
+      let handshakeTimer;
+      let ended = false;
+      endConnection = (message, { close = false, state = 'disconnected', retry = true, silent = false } = {}) => {
+        if (ended) return;
+        ended = true;
+        clearTimeout(handshakeTimer);
+        session.close();
+        const current = nativePort === port;
+        if (current) { nativePort = undefined; closeConnection = undefined; }
+        // Local disconnect() does not fire this port's onDisconnect event.
+        if (close) port.disconnect();
+        if (!current) return;
+        if (!silent) void publish({ state, message });
+        if (retry) scheduleReconnect();
+      };
+      closeConnection = () => endConnection('', { close: true, retry: false, silent: true });
+      handshakeTimer = setTimeout(() => {
+        endConnection('本机连接握手超时，正在重试。', { close: true });
       }, 10000);
       port.onMessage.addListener(message => {
         if (port !== nativePort) return;
@@ -55,25 +71,18 @@ async function connectIfEnabled() {
             void chrome.alarms.clear(RETRY_ALARM);
             void publish({ state: 'connected', message: '已连接本机桥接服务。', browser_instance_id: settings.browserInstanceId, session_id: sessionId });
           } else {
-            void publish({ state: 'error', message: message.error?.message ?? '桥接服务拒绝连接。' });
-            port.disconnect();
+            endConnection(message.error?.message ?? '桥接服务拒绝连接。', { close: true, state: 'error' });
           }
           return;
         }
         void session.handle(message).catch(error => {
           console.error('Chrome API RPC:', error.message);
-          port.disconnect();
+          endConnection(String(error?.message ?? error), { close: true, state: 'error' });
         });
       });
       port.onDisconnect.addListener(() => {
-        clearTimeout(handshakeTimer);
         const message = chrome.runtime.lastError?.message ?? 'Native Host 连接已关闭。';
-        session.close();
-        if (nativePort !== port) return;
-        nativePort = undefined;
-        rpc = undefined;
-        void publish({ state: 'disconnected', message });
-        scheduleReconnect();
+        endConnection(message);
       });
       // Install listeners before an asynchronous storage write: a missing host
       // can disconnect as soon as connectNative() returns.
@@ -84,11 +93,12 @@ async function connectIfEnabled() {
       port.postMessage({ v: 1, type: 'hello', role: 'extension', browser_instance_id: settings.browserInstanceId, session_id: sessionId, name: settings.browserName,
         capabilities: { methods, api_modes: API_MODES, max_frame_bytes: 262144, max_result_bytes: 33554432, events: false } });
     } catch (error) {
-      nativePort = undefined;
-      rpc?.close();
-      rpc = undefined;
-      await publish({ state: 'disconnected', message: String(error?.message ?? error) });
-      scheduleReconnect();
+      const message = String(error?.message ?? error);
+      if (endConnection) endConnection(message, { close: true });
+      else {
+        await publish({ state: 'disconnected', message });
+        scheduleReconnect();
+      }
     }
   })();
   try { await connecting; } finally { connecting = undefined; }
@@ -98,11 +108,7 @@ async function setEnabled(enabled) {
   generation++;
   await chrome.storage.local.set({ bridgeEnabled: enabled });
   if (!enabled) {
-    const oldPort = nativePort;
-    nativePort = undefined;
-    rpc?.close();
-    rpc = undefined;
-    oldPort?.disconnect();
+    closeConnection?.();
     clearTimeout(retryTimer);
     await chrome.alarms.clear(RETRY_ALARM);
     await publish({ state: 'disabled', message: '连接已停用。' });
@@ -124,10 +130,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (message?.type === 'bridge.rename' && typeof message.name === 'string' && message.name.trim() && message.name.length <= 80) {
       generation++;
       await chrome.storage.local.set({ browserName: message.name.trim() });
-      const oldPort = nativePort;
-      nativePort = undefined;
-      rpc?.close();
-      oldPort?.disconnect();
+      closeConnection?.();
       await connecting;
       await connectIfEnabled();
       return { status };
