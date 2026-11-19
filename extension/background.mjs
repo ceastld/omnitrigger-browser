@@ -42,8 +42,21 @@ async function connectIfEnabled() {
       nativePort = port;
       rpc = new RpcSession({ chromeApi: chrome, sessionId, browserInstanceId: settings.browserInstanceId, send: message => port.postMessage(message) });
       const session = rpc;
+      let ended = false;
+      const endConnection = (message, close = false) => {
+        if (ended) return;
+        ended = true;
+        clearTimeout(handshakeTimer);
+        session.close();
+        if (nativePort !== port) return;
+        nativePort = undefined;
+        rpc = undefined;
+        if (close) port.disconnect();
+        void publish({ state: 'disconnected', message });
+        scheduleReconnect();
+      };
       const handshakeTimer = setTimeout(() => {
-        if (nativePort === port) port.disconnect();
+        endConnection('本机连接握手超时，正在重试。', true);
       }, 10000);
       port.onMessage.addListener(message => {
         if (port !== nativePort) return;
@@ -66,14 +79,8 @@ async function connectIfEnabled() {
         });
       });
       port.onDisconnect.addListener(() => {
-        clearTimeout(handshakeTimer);
         const message = chrome.runtime.lastError?.message ?? 'Native Host 连接已关闭。';
-        session.close();
-        if (nativePort !== port) return;
-        nativePort = undefined;
-        rpc = undefined;
-        void publish({ state: 'disconnected', message });
-        scheduleReconnect();
+        endConnection(message);
       });
       // Install listeners before an asynchronous storage write: a missing host
       // can disconnect as soon as connectNative() returns.
